@@ -19,6 +19,7 @@ var decodeSuccessCallback = function(audioBuffer) {
 	audioBufferSourceNode.connect(audioContext.destination);
 
 	process(audioBuffer.getChannelData(0), audioBuffer.sampleRate);
+	//processAudioBuffer2(audioBuffer);
 	audioBufferSourceNode.start();
 	startTime = audioContext.currentTime;
 };
@@ -45,7 +46,10 @@ input.addEventListener('change', function() {
 
 
 
-var powers;
+var graph1;
+var graph2;
+var graph3;
+
 var render = function() {
 	requestAnimationFrame(render);
 
@@ -60,13 +64,33 @@ var render = function() {
 
 	context.setTransform(1, 0, 0, 1000, -frame, 0);
 	
+	context.globalAlpha = .5;
+
+	context.strokeStyle = 'red';
 	context.beginPath();
-	for (var frame = 0; frame < powers.length; ++frame) {
+	for (var frame = 0; frame < graph1.length; ++frame) {
 		context.moveTo(frame, 0);
-		context.lineTo(frame, powers[frame]);
+		context.lineTo(frame, graph1[frame]);
 	}
 	context.stroke();
 
+	context.strokeStyle = 'green';
+	context.beginPath();
+	for (var frame = 0; frame < graph2.length; ++frame) {
+		context.moveTo(frame, 0);
+		context.lineTo(frame, graph2[frame]);
+	}
+	//context.stroke();
+
+	context.strokeStyle = 'blue';
+	context.beginPath();
+	for (var frame = 0; frame < graph3.length; ++frame) {
+		context.moveTo(frame, 0);
+		context.lineTo(frame, graph3[frame] * 10);
+	}
+	//context.stroke();
+
+	context.globalAlpha = 1;
 };
 
 var process = function(samples, sampleRate) {
@@ -74,19 +98,53 @@ var process = function(samples, sampleRate) {
 	var fft = new FFT(samplesPerFrame, sampleRate);
 	var frames = samples.length / samplesPerFrame - 1;
 	var energies = new Float32Array(frames);
+
+	var powers1 = new Float32Array(frames - 1);
+	var powers2 = new Float32Array(frames - 1);
+	var powers3 = new Float32Array(frames - 1);
+
+	var last_energy = 0;
 	for (var frame = 0; frame < frames; ++frame) {
 		var frameSamples = samples.slice(frame * samplesPerFrame, (frame + 1) * samplesPerFrame);
 		fft.forward(frameSamples);
-		var band = fft.spectrum.slice(0, 10);
-		var energy = 0;
-		for (var bin = 0; bin < band.length; ++bin) {
-			energy += band[bin] * band[bin];
+
+		var energy;
+
+		var band1 = fft.spectrum.slice(0, 10);
+		energy = 0;
+		for (var bin = 0; bin < band1.length; ++bin) {
+			energy += band1[bin] * band1[bin];
 		}
-		energies[frame] = energy;
+		powers1[frame] = energy - last_energy;
+
+		var band2 = fft.spectrum.slice(10, 100);
+		energy = 0;
+		for (var bin = 0; bin < band2.length; ++bin) {
+			energy += band2[bin] * band2[bin];
+		}
+		powers2[frame] = energy - last_energy;
+
+		var band3 = fft.spectrum.slice(100, 512);
+		energy = 0;
+		for (var bin = 0; bin < band3.length; ++bin) {
+			energy += band3[bin] * band3[bin];
+		}
+		powers3[frame] = energy - last_energy;
 	}
-	powers = new Float32Array(frames - 1);
-	for (var frame = 0; frame < frames - 1; ++frame) {
-		powers[frame] = energies[frame + 1] - energies[frame];
+
+	graph1 = powers1;
+	graph2 = powers2;
+	graph3 = powers3;
+
+	// Peak picking
+
+	var movingAverages = getSimpleMovingAverage(powers1, 30);
+	for (var frame = 0; frame < powers1.length; ++frame) {
+		if (powers1[frame] < 0) continue;
+		if (powers1[frame] > movingAverages[frame] * 3) {
+			var seconds = frame * samplesPerFrame / audioContext.sampleRate;
+			setTimeout(function() { console.log('beat'); }, seconds * 1000);
+		}
 	}
 
 	render();
@@ -206,6 +264,8 @@ var processAudioBuffer2 = function(audioBuffer) {
 
 	// Calculate spectral flux
 	var spectralFlux = getSpectralFlux(samples, samplesPerFrame, audioBuffer.sampleRate);
+
+	graph1 = spectralFlux;
 
 	// Calculate smoothed spectral flux (exponential moving average)
 	var spectralFluxEMA = getExponentialMovingAverage(spectralFlux, .5);
