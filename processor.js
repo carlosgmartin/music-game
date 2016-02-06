@@ -15,17 +15,16 @@ var process = function(samples, sampleRate) {
 		energies.push(energy);
 	}
 
-	// Plot energy levels with moving averages
-	graphs.push({data: energies, color: 'red'});
-	graphs.push({data: getMovingAverage(energies, 4), color: 'green'});
-	graphs.push({data: getMovingAverage(energies, 16), color: 'blue'});
+	// Plot energy levels with moving averages and moving maxima
+	graphs.push({data: energies, color: '#f00'});
+	graphs.push({data: getMovingAverage(energies, 4), color: '#800'});
+	graphs.push({data: getMovingMaximum(energies, 8), color: '#f88'});
 
-	// Plot changes in energy
-	var difference = getDifference(energies);
-	graphs.push({data: difference, color: 'orange'});
-
-	// Plot the moving maximum of the energy
-	graphs.push({data: getMovingMaximum(energies, 8), color: 'pink'});
+	// Calculate changes in energy levels and plot them
+	var powers = getDifference(energies);
+	graphs.push({data: powers, color: '#00f'});
+	graphs.push({data: getMovingAverage(powers, 4), color: '#008'});
+	graphs.push({data: getMovingMaximum(powers, 8), color: '#88f'});
 
 	render();
 };
