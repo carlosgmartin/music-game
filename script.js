@@ -80,7 +80,7 @@ var render = function() {
 		context.moveTo(frame, 0);
 		context.lineTo(frame, graph2[frame]);
 	}
-	//context.stroke();
+	context.stroke();
 
 	context.strokeStyle = 'blue';
 	context.beginPath();
@@ -88,7 +88,7 @@ var render = function() {
 		context.moveTo(frame, 0);
 		context.lineTo(frame, graph3[frame] * 10);
 	}
-	//context.stroke();
+	context.stroke();
 
 	context.globalAlpha = 1;
 };
@@ -138,10 +138,14 @@ var process = function(samples, sampleRate) {
 
 	// Peak picking
 
-	var movingAverages = getSimpleMovingAverage(powers1, 30);
-	for (var frame = 0; frame < powers1.length; ++frame) {
-		if (powers1[frame] < 0) continue;
-		if (powers1[frame] > movingAverages[frame] * 3) {
+	var powers = powers3;
+
+	var movingAverages = getSimpleMovingAverage(powers, 10);
+	for (var frame = 0; frame < powers.length - 1; ++frame) {
+		if (powers[frame] < 0) continue;
+
+		if (powers[frame] < powers[frame + 1]) continue;
+		if (powers[frame] > movingAverages[frame] * 3) {
 			var seconds = frame * samplesPerFrame / audioContext.sampleRate;
 			setTimeout(function() { console.log('beat'); }, seconds * 1000);
 		}
