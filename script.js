@@ -1,6 +1,5 @@
-// TODO: Separate different audio processing stages into functions
-// Try exponential decaying technique
 // Plot detection function and peaks
+// Try energy of first few frequency bins with exponential decay
 
 // Audio context
 var audioContext = new AudioContext();
@@ -33,62 +32,128 @@ input.addEventListener('change', function() {
 	fileReader.readAsArrayBuffer(input.files[0]);
 });
 
-// Process audio buffer
-var processAudioBuffer = function(audioBuffer) {
-	// Calculate spectral flux
-	var samples = audioBuffer.getChannelData(0);
-	var samplesPerFrame = 1024;
-	var fft = new FFT(samplesPerFrame, audioBuffer.sampleRate);
 
+
+
+
+
+
+
+
+
+var getDifference = function(array1, array2) {
+	if (array1.length != array2.length) {
+		console.log('Error: Array lengths are not equal');
+	}
+	var difference = new Float32Array(array1.length);
+	for (var n = 0; n < difference.length; ++n) {
+		difference[n] = array1[n] - array2[n];
+	}
+	return difference;
+};
+
+var getRectified = function(array) {
+	var rectified = new Float32Array(array);
+	for (var n = 0; n < rectified.length; ++n) {
+		if (rectified[n] < 0) {
+			rectified[n] = 0;
+		}
+	}
+	return rectified;
+};
+
+var getScaled = function(array, scaleFactor) {
+	var scaled = new Float32Array(array);
+	for (var n = 0; n < scaled.length; ++n) {
+		scaled[n] *= scaleFactor;
+	}
+	return scaled;
+};
+
+var getL1Norm = function(array) {
+	var sum = 0;
+	for (var n = 0; n < array.length; ++n) {
+		sum += Math.abs(array[n]);
+	}
+	return sum;
+};
+
+var getL2Norm = function(array) {
+	var sum = 0;
+	for (var n = 0; n < array.length; ++n) {
+		sum += array[n] * array[n];
+	}
+	return Math.sqrt(sum);
+};
+
+var getSpectralFlux = function(samples, samplesPerFrame, sampleRate) {
+	var fft = new FFT(samplesPerFrame, sampleRate);
 	var frames = Math.floor(samples.length / samplesPerFrame) - 1;
 	var spectralFlux = new Float32Array(frames);
-
-	var lastSpectrum = new Float32Array(samplesPerFrame);
-	for (var frame = 0; frame < frames; ++frame) {
+	var lastSpectrum = new Float32Array(samplesPerFrame / 2);
+	for (var frame = 0; frame < spectralFlux.length; ++frame) {
 		var frameSamples = samples.slice(frame * samplesPerFrame, (frame + 1) * samplesPerFrame);
 		fft.forward(frameSamples);
 		currentSpectrum = fft.spectrum;
-		for (var bin = 0; bin < currentSpectrum.length; ++bin) {
-			var difference = currentSpectrum[bin] - lastSpectrum[bin];
-			if (difference > 0) {
-				spectralFlux[frame] += difference;
-			}
-		}
+
+		var difference = getDifference(currentSpectrum, lastSpectrum);
+		var rectifiedDifference = getRectified(difference);
+		spectralFlux[frame] = getL1Norm(rectifiedDifference);
+
 		lastSpectrum = new Float32Array(currentSpectrum);
 	}
-	// Calculate smoothed spectral flux (exponential moving average)
-	var exponentialSmoothedSpectralFlux = new Float32Array(frames);
-	var smoothingFactor = .5;
-	for (var frame = 0; frame < frames - 1; ++frame) {
-		exponentialSmoothedSpectralFlux[frame + 1] = smoothingFactor * spectralFlux[frame] + (1 - smoothingFactor) * exponentialSmoothedSpectralFlux[frame];
+	return spectralFlux;
+};
+
+var getExponentialMovingAverage = function(data, smoothingFactor) {
+	var exponentialMovingAverage = new Float32Array(data.length);
+	for (var point = 0; point < exponentialMovingAverage.length - 1; ++point) {
+		exponentialMovingAverage[point + 1] = smoothingFactor * exponentialMovingAverage[point] + (1 - smoothingFactor) * data[point];
 	}
-	// Calculate smoothed spectral flux (simple moving average) with multiplier
-	var multiplier = 2;
-	var simpleSmoothedSpectralFlux = new Float32Array(frames);
-	var windowSize = 5;
-	for (var frame = 0; frame < frames; ++frame) {
-		var start = Math.max(0, frame - windowSize);
-		var end = Math.min(frames - 1, frame + windowSize);
+	return exponentialMovingAverage;
+};
+
+var getSimpleMovingAverage = function(data, range) {
+	var simpleMovingAverage = new Float32Array(data.length);
+	for (var point = 0; point < simpleMovingAverage.length; ++point) {
+		var startPoint = Math.max(0, point - range);
+		var endPoint = Math.min(data.length - 1, point + range);
 		var sum = 0;
-		for (var windowFrame = start; windowFrame <= end; ++windowFrame) {
-			sum += spectralFlux[windowFrame];
+		for (var rangePoint = startPoint; rangePoint <= endPoint; ++rangePoint) {
+			sum += data[rangePoint];
 		}
-		var mean = sum / (end - start + 1);
-		simpleSmoothedSpectralFlux[frame] = mean * multiplier;
+		simpleMovingAverage[point] = sum / (endPoint - startPoint + 1);
 	}
+	return simpleMovingAverage;
+};
+
+
+
+
+
+// Process audio buffer
+var processAudioBuffer = function(audioBuffer) {
+	// Get audio samples (PCM)
+	var samples = audioBuffer.getChannelData(0);
+	var samplesPerFrame = 1024;
+
+	// Calculate spectral flux
+	var spectralFlux = getSpectralFlux(samples, samplesPerFrame, audioBuffer.sampleRate);
+
+	// Calculate smoothed spectral flux (exponential moving average)
+	var spectralFluxEMA = getExponentialMovingAverage(spectralFlux, .5);
+
+	// Calculate smoothed spectral flux (simple moving average) with multiplier
+	var spectralFluxSMA = getSimpleMovingAverage(spectralFlux, 5);
+	spectralFluxSMA = getScaled(spectralFluxSMA, 1.75);
+
 	// Find pruned spectral flux
-	var prunedSpectralFlux = new Float32Array(frames);
-	for (var frame = 0; frame < frames; ++frame) {
-		var offset = spectralFlux[frame] - simpleSmoothedSpectralFlux[frame];
-		if (offset > 0) {
-			prunedSpectralFlux[frame] = offset;
-		} else {
-			prunedSpectralFlux[frame] = 0;
-		}
-	}
+	var prunedSpectralFlux = getDifference(spectralFlux, spectralFluxSMA);
+	prunedSpectralFlux = getRectified(prunedSpectralFlux);
+
 	// Find spectral flux peaks
-	var spectralFluxPeaks = new Float32Array(frames);
-	for (var frame = 0; frame < frames - 1; ++frame) {
+	var spectralFluxPeaks = new Float32Array(prunedSpectralFlux.length);
+	for (var frame = 0; frame < spectralFluxPeaks.length - 1; ++frame) {
 		if (prunedSpectralFlux[frame] > prunedSpectralFlux[frame + 1]) {
 			spectralFluxPeaks[frame] = prunedSpectralFlux[frame];
 		} else {
@@ -98,7 +163,7 @@ var processAudioBuffer = function(audioBuffer) {
 	// Remove close peaks
 	var lastPeakFrame = 0;
 	var peakWindowSize = 5;
-	for (var frame = 0; frame < frames - 1; ++frame) {
+	for (var frame = 0; frame < spectralFluxPeaks.length - 1; ++frame) {
 		if (frame - lastPeakFrame < peakWindowSize) {
 			spectralFluxPeaks[frame] = 0;
 		} else {
@@ -108,7 +173,7 @@ var processAudioBuffer = function(audioBuffer) {
 		}
 	}
 	// Schedule beats
-	for (var frame = 0; frame < frames; ++frame) {
+	for (var frame = 0; frame < spectralFluxPeaks.length; ++frame) {
 		if (spectralFluxPeaks[frame] > 0) {
 			var seconds = frame * samplesPerFrame / audioBuffer.sampleRate;
 			setTimeout(function() { console.log('beat'); }, seconds * 1000);
@@ -117,6 +182,13 @@ var processAudioBuffer = function(audioBuffer) {
 	// Play music
 	audioBufferSourceNode.start();
 };
+
+
+
+
+
+
+
 
 // Process audio buffer (old)
 var processAudioBufferOld = function(audioBuffer) {
