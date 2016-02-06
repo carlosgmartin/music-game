@@ -3,16 +3,26 @@ var frameOffset = 512;
 
 // Process audio samples
 var process = function(samples, sampleRate) {
+	// Create FFT analyser
+	var fft = new FFT(frameSize, sampleRate);
+
 	// Calculate sound energies for each frame
 	var energies = [];
+	var lowFreqEnergies = [];
 	for (var sample = 0; sample < samples.length - frameSize; sample += frameOffset) {
+		// Get samples for this frame
 		var frameSamples = samples.slice(sample, sample + frameSize);
 
-		var energy = 0;
-		for (var frameSample = 0; frameSample < frameSamples.length; ++frameSample) {
-			energy += frameSamples[frameSample] * frameSamples[frameSample];
-		}
+		// Record energy for this frame
+		var energy = getEnergy(frameSamples);
 		energies.push(energy);
+
+		// Get FFT of frame samples
+		fft.forward(frameSamples);
+		// Record energy for this frame for low frequencies
+		var lowFrequencies = fft.spectrum.slice(0, 10);
+		var lowFreqEnergy = getEnergy(lowFrequencies);
+		lowFreqEnergies.push(lowFreqEnergy * 1000);
 	}
 
 	// Plot energy levels with moving averages and moving maxima
@@ -26,7 +36,19 @@ var process = function(samples, sampleRate) {
 	graphs.push({data: getMovingAverage(powers, 4), color: '#008'});
 	graphs.push({data: getMovingMaximum(powers, 8), color: '#88f'});
 
+	// Plot energy levels for low frequencies
+	graphs.push({data: lowFreqEnergies, color: '#fa0'});
+
 	render();
+};
+
+// Calculate the squared amplitude (energy)
+var getEnergy = function(data) {
+	var result = 0;
+	for (var i = 0; i < data.length; ++i) {
+		result += data[i] * data[i];
+	}
+	return result;
 };
 
 // Calculate the moving average with a specified range
