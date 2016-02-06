@@ -25,12 +25,12 @@ var process = function(samples, sampleRate) {
 		lowFreqEnergies.push(lowFreqEnergy * 1000);
 	}
 
-	// Plot energy levels with moving averages and moving maxima
+	// Plot energy levels
 	graphs.push({data: energies, color: '#f00'});
 	graphs.push({data: getMovingAverage(energies, 4), color: '#800'});
 	graphs.push({data: getMovingMaximum(energies, 8), color: '#f88'});
 
-	// Calculate changes in energy levels and plot them
+	// Calculate changes in energy levels
 	var powers = getDifference(energies);
 	graphs.push({data: powers, color: '#00f'});
 	graphs.push({data: getMovingAverage(powers, 4), color: '#008'});
