@@ -1,9 +1,8 @@
-var startTime = 0;
 var frameSize = 1024;
 
+// Process audio samples
 var process = function(samples, sampleRate) {
-	startTime = audioContext.currentTime;
-	
+	// Calculate sound energies for each frame
 	var energies = [];
 	for (var sample = 0; sample < samples.length - frameSize; sample += frameSize) {
 		var frameSamples = samples.slice(sample, sample + frameSize);
@@ -13,22 +12,39 @@ var process = function(samples, sampleRate) {
 		}
 		energies.push(energy);
 	}
+
+	// Plot energy levels with moving averages
 	graphs.push({data: energies, color: 'red'});
-	graphs.push({data: getSimpleMovingAverage(energies, 20), color: 'green'});
+	graphs.push({data: getMovingAverage(energies, 4), color: 'green'});
+	graphs.push({data: getMovingAverage(energies, 16), color: 'blue'});
+
+	// Calculate energy changes and plot them
+	var difference = getDifference(energies);
+	graphs.push({data: difference, color: 'orange'});
 
 	render();
 };
 
-var getSimpleMovingAverage = function(data, range) {
-	var movingAverage = new Float32Array(data.length);
-	for (var point = 0; point < movingAverage.length; ++point) {
-		var startPoint = Math.max(0, point - range);
-		var endPoint = Math.min(data.length - 1, point + range);
+// Calculate the moving average of the data with a specified range or window size
+var getMovingAverage = function(data, range) {
+	var result = new Float32Array(data.length);
+	for (var i = 0; i < data.length; ++i) {
+		var start = Math.max(0, i - range);
+		var end = Math.min(data.length - 1, i + range);
 		var sum = 0;
-		for (var rangePoint = startPoint; rangePoint <= endPoint; ++rangePoint) {
-			sum += data[rangePoint];
+		for (var j = start; j <= end; ++j) {
+			sum += data[j];
 		}
-		movingAverage[point] = sum / (endPoint - startPoint + 1);
+		result[i] = sum / (end - start + 1);
 	}
-	return movingAverage;
+	return result;
+};
+
+// Calculate the first order discrete difference of the data
+var getDifference = function(data) {
+	var result = new Float32Array(data.length - 1);
+	for (var i = 0; i < data.length - 1; ++i) {
+		result[i] = data[i + 1] - data[i];
+	}
+	return result;
 };
