@@ -1,9 +1,14 @@
 // Plot detection function and peaks
 // Try energy of first few frequency bins with exponential decay
 
+// Canvas element
+var canvas = document.getElementById('canvas');
+var context = canvas.getContext('2d');
+
 // Audio context
 var audioContext = new AudioContext();
 var audioBufferSourceNode = audioContext.createBufferSource();
+var startTime = 0;
 
 // File reader
 var fileReader = new FileReader();
@@ -13,7 +18,9 @@ var decodeSuccessCallback = function(audioBuffer) {
 	audioBufferSourceNode.buffer = audioBuffer;
 	audioBufferSourceNode.connect(audioContext.destination);
 
-	processAudioBuffer(audioBuffer);
+	process(audioBuffer.getChannelData(0), audioBuffer.sampleRate);
+	audioBufferSourceNode.start();
+	startTime = audioContext.currentTime;
 };
 var decodeErrorCallback = function() {
 	console.log('Error decoding audio data');
@@ -38,8 +45,72 @@ input.addEventListener('change', function() {
 
 
 
+var powers;
+var render = function() {
+	requestAnimationFrame(render);
+
+	context.setTransform(1, 0, 0, 1, 0, 0);
+	context.clearRect(0, 0, canvas.width, canvas.height);
+	context.strokeRect(0, 0, canvas.width, canvas.height);
 
 
+	var seconds = audioContext.currentTime - startTime;
+	var sample = audioContext.sampleRate * seconds;
+	var frame = sample / 1024;
+
+	context.setTransform(1, 0, 0, 1000, -frame, 0);
+	
+	context.beginPath();
+	for (var frame = 0; frame < powers.length; ++frame) {
+		context.moveTo(frame, 0);
+		context.lineTo(frame, powers[frame]);
+	}
+	context.stroke();
+
+};
+
+var process = function(samples, sampleRate) {
+	var samplesPerFrame = 1024;
+	var fft = new FFT(samplesPerFrame, sampleRate);
+	var frames = samples.length / samplesPerFrame - 1;
+	var energies = new Float32Array(frames);
+	for (var frame = 0; frame < frames; ++frame) {
+		var frameSamples = samples.slice(frame * samplesPerFrame, (frame + 1) * samplesPerFrame);
+		fft.forward(frameSamples);
+		var band = fft.spectrum.slice(0, 10);
+		var energy = 0;
+		for (var bin = 0; bin < band.length; ++bin) {
+			energy += band[bin] * band[bin];
+		}
+		energies[frame] = energy;
+	}
+	powers = new Float32Array(frames - 1);
+	for (var frame = 0; frame < frames - 1; ++frame) {
+		powers[frame] = energies[frame + 1] - energies[frame];
+	}
+
+	render();
+}
+
+
+
+
+
+
+var process2 = function(samples, sampleRate) {
+	// var samplesPerFrame = Math.pow(2, Math.ceil(Math.log(sampleRate * 0.02) / Math.LN2));
+	var frameSamples = 1024;
+	var fft = new FFT(frameSamples, sampleRate);
+
+	var spectrogram = new Float32Array(samples.length);
+	for (var sample = frameSamples/2; sample < samples.length - frameSamples/2; ++sample) {
+		fft.forward(samples.slice(sample - frameSamples/2, sample + frameSamples/2));
+		//spectrogram[sample] = fft.spectrum[0] * fft.spectrum[0];
+		spectrogram[sample] = 0;
+	}
+
+	console.log(spectrogram[0]);
+};
 
 var getDifference = function(array1, array2) {
 	if (array1.length != array2.length) {
@@ -127,12 +198,8 @@ var getSimpleMovingAverage = function(data, range) {
 	return simpleMovingAverage;
 };
 
-
-
-
-
 // Process audio buffer
-var processAudioBuffer = function(audioBuffer) {
+var processAudioBuffer2 = function(audioBuffer) {
 	// Get audio samples (PCM)
 	var samples = audioBuffer.getChannelData(0);
 	var samplesPerFrame = 1024;
@@ -179,19 +246,10 @@ var processAudioBuffer = function(audioBuffer) {
 			setTimeout(function() { console.log('beat'); }, seconds * 1000);
 		}
 	}
-	// Play music
-	audioBufferSourceNode.start();
 };
 
-
-
-
-
-
-
-
-// Process audio buffer (old)
-var processAudioBufferOld = function(audioBuffer) {
+// Process audio buffer
+var processAudioBuffer1 = function(audioBuffer) {
 	var frameSize = 2048;
 	// Get PCM data (samples)
 	var data = audioBuffer.getChannelData(0);
@@ -257,29 +315,4 @@ var processAudioBufferOld = function(audioBuffer) {
 			lastBeatFrame = frame;
 		}
 	}
-
-	audioBufferSourceNode.start();
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
