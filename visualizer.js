@@ -1,36 +1,37 @@
-// Get the canvas element
-var canvas = document.getElementById('visualizer');
-var canvasContext = canvas.getContext('2d');
+// Get the visualizer element
+var visualizer = document.getElementById('visualizer');
+var visualizerContext = visualizer.getContext('2d');
 
 var graphs = [];
 var render = function() {
 	// Schedule next animation frame
 	requestAnimationFrame(render);
 
-	// Clear canvas and draw canvas outline
-	canvasContext.setTransform(1, 0, 0, 1, 0, 0);
-	canvasContext.clearRect(0, 0, canvas.width, canvas.height);
-	canvasContext.strokeStyle = 'black';
-	canvasContext.strokeRect(0, 0, canvas.width, canvas.height);
+	// Clear visualizer and draw visualizer outline
+	visualizerContext.setTransform(1, 0, 0, 1, 0, 0);
+	visualizerContext.clearRect(0, 0, visualizer.width, visualizer.height);
+	visualizerContext.strokeStyle = 'black';
+	visualizerContext.strokeRect(0, 0, visualizer.width, visualizer.height);
 
 	// Find current frame in audio based on elapsed time
 	var secondsElapsed = audioContext.currentTime - startTime;
 	var currentSample = audioContext.sampleRate * secondsElapsed;
-	var currentFrame = currentSample / frameSize;
+	var currentFrame = currentSample / frameOffset;
 
+	// Adjust zoom level for visualizerion
 	var zoom = 1;
-	canvasContext.translate(-currentFrame * zoom, canvas.height);
-	canvasContext.scale(zoom, -1);
+	visualizerContext.translate(-currentFrame * zoom, visualizer.height);
+	visualizerContext.scale(zoom, -1);
 
 	// Plot graphs
 	for (var i = 0; i < graphs.length; ++i) {
 		var data = graphs[i].data;
-		canvasContext.beginPath();
-		canvasContext.moveTo(0, data[0]);
+		visualizerContext.beginPath();
+		visualizerContext.moveTo(0, data[0]);
 		for (var j = 1; j < data.length; ++j) {
-			canvasContext.lineTo(j, data[j]);
+			visualizerContext.lineTo(j, data[j]);
 		}
-		canvasContext.strokeStyle = graphs[i].color;
-		canvasContext.stroke();
+		visualizerContext.strokeStyle = graphs[i].color;
+		visualizerContext.stroke();
 	}
 };
